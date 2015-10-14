@@ -40,5 +40,5 @@ def includeme(config):
 
     config.add_translation_dirs('kotti_jsonapi:locale')
     config.add_static_view('static-kotti_jsonapi', 'kotti_jsonapi:static')
-
+    config.include('kotti_jsonapi.rest')
     config.scan(__name__)
