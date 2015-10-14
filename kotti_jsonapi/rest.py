@@ -48,12 +48,30 @@ from pyramid.httpexceptions import HTTPForbidden
 from pyramid.httpexceptions import HTTPNoContent
 from pyramid.renderers import JSONP, render
 from pyramid.view import view_config, view_defaults
+from pyramid.interfaces import ILocation
 from zope.interface import Interface
 import colander
 import datetime
 import decimal
 import json
 import venusian
+
+class JSONTemplateAPI(TemplateAPI):
+    def path(self, context=None, *elements, **kwargs):
+        """
+        URL construction helper. Just a convenience wrapper for
+        :func:`pyramid.request.resource_url` with the same signature.  If
+        ``context`` is ``None`` the current context is passed to
+        ``resource_url``.
+        """
+
+        if context is None:
+            context = self.context
+        if not ILocation.providedBy(context):
+            return self.request.path
+        return self.request.resource_path(context, *elements, **kwargs)
+
+
 
 
 class ISchemaFactory(Interface):
@@ -265,7 +283,7 @@ class MetadataSchema(colander.MappingSchema):
 
 def serialize_user(context, request, api=None):
     if api is None:
-        api = TemplateAPI(context, request)
+        api = JSONTemplateAPI(context, request)
     udata = None
     user = request.user
     if user is not None:
@@ -315,15 +333,16 @@ def handle_link_parent(link, context, request):
 def relational_metadata(obj, request):
     # some of this is just to mimick templates
     relmeta = dict()
-    api = TemplateAPI(obj, request)
+    api = JSONTemplateAPI(obj, request)
     
     navitems = list()
     for item in api.list_children(api.navigation_root):
         if item.in_navigation:
             idata = dict(inside=api.inside(obj, item),
-                        url=api.url(item),
-                        description=item.description,
-                        title=item.title)
+                         url=api.url(item),
+                         path=api.path(item),
+                         description=item.description,
+                         title=item.title)
             navitems.append(idata)
     relmeta['navitems'] = navitems
 
@@ -417,6 +436,7 @@ def relational_metadata(obj, request):
                                 name=bc.name,
                                 description=bc.description,
                                 url=api.url(bc),
+                                path=api.path(bc),
                                 title=bc.title))
     relmeta['breadcrumbs'] = breadcrumbs
     
