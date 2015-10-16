@@ -32,6 +32,7 @@ TODO: handle permissions/security
 """
 
 from kotti.resources import Content, Document, File #, IImage
+from kotti.resources import Image
 from kotti.util import _
 from kotti.util import title_to_name
 from kotti.util import LinkParent, LinkRenderer
@@ -41,6 +42,7 @@ from kotti.views.edit.actions import workflow as get_workflow
 from kotti.views.edit.actions import actions as get_actions
 from kotti.views.edit.actions import \
     content_type_factories as get_content_type_factories
+from kotti.views.edit.actions import contents_buttons as get_contents_buttons
 
 from kotti.views.edit.default_views import DefaultViewSelection
 from pyramid.httpexceptions import HTTPCreated
@@ -138,6 +140,11 @@ def document_schema_factory(context, request):
 
 
 @restify(File)
+def file_schema_factory(context, request):
+    from kotti.views.edit.content import FileSchema
+    return FileSchema(None)
+
+@restify(Image)
 def file_schema_factory(context, request):
     from kotti.views.edit.content import FileSchema
     return FileSchema(None)
@@ -320,6 +327,14 @@ def get_link_info(link, context, request):
             link_data[key] = value
     return link_data
 
+def get_button_info(button_link, context, request):
+    link_data = get_link_info(button_link, context, request)
+    link_data['css_classes'] = button_link.css_class.split()
+    link_data['no_children'] = button_link.no_children
+    link_data['template'] = button_link.template
+    return link_data
+
+
 def handle_link_parent(link, context, request):
     children = link.get_visible_children(context, request)
     action_links = list()
@@ -330,11 +345,42 @@ def handle_link_parent(link, context, request):
             continue
     return action_links
 
-def relational_metadata(obj, request):
+def relational_metadata(obj, request, get_user=True,
+                        get_type_info=True,
+                        get_permissions=True,
+                        get_extra_info=True):
     # some of this is just to mimick templates
     relmeta = dict()
     api = JSONTemplateAPI(obj, request)
+    if get_user:
+        relmeta['current_user'] = serialize_user(obj, request, api=api)
+
+    if get_type_info:
+        # type info
+        type_info = dict()
+        for attr in ['selectable_default_views', 'title', 'name',
+                     'addable_to', 'add_permission']:
+            type_info[attr] = getattr(obj.type_info, attr)
+        if type_info['name'] == 'Image':
+            for span in ['span1', 'span4']:
+                key = 'image_%s_url' % span
+                type_info[key] = request.resource_url(obj, 'image', span)
+        relmeta['type_info'] = type_info
+
+    if get_permissions:
+        # permissions
+        has_permission = dict()
+        for key in ['add', 'edit', 'state_change']:
+            has_permission[key] = bool(api.has_permission(key).boolval)
+        has_permission['admin'] = bool(
+            api.has_permission('admin', api.root).boolval)
+        relmeta['has_permission'] = has_permission
+        
+
+    if not get_extra_info:
+        return relmeta
     
+    # for top navbar
     navitems = list()
     for item in api.list_children(api.navigation_root):
         if item.in_navigation:
@@ -346,22 +392,8 @@ def relational_metadata(obj, request):
             navitems.append(idata)
     relmeta['navitems'] = navitems
 
-    # type info
-    type_info = dict()
-    for attr in ['selectable_default_views', 'title',
-                 'addable_to', 'add_permission']:
-        type_info[attr] = getattr(obj.type_info, attr)
-    relmeta['type_info'] = type_info
 
-    # permissions
-    has_permission = dict()
-    for key in ['add', 'edit', 'state_change']:
-        has_permission[key] = bool(api.has_permission(key).boolval)
-    has_permission['admin'] = bool(api.has_permission('admin', api.root).boolval)
-    relmeta['has_permission'] = has_permission
-        
 
-    # for top navbar
     relmeta['application_url'] = request.application_url
     relmeta['site_title'] = api.site_title
     relmeta['root_url'] = api.url(api.root)
@@ -439,6 +471,19 @@ def relational_metadata(obj, request):
                                 path=api.path(bc),
                                 title=bc.title))
     relmeta['breadcrumbs'] = breadcrumbs
+
+    lineage = list()
+    for node in api.lineage:
+        lineage.append(dict(id=node.id,
+                            name=node.name,
+                            description=node.description,
+                            url=api.url(node),
+                            path=api.path(node),
+                            title=node.title))
+    relmeta['lineage'] = lineage
+    # FIXME - do this client side
+    #http://stackoverflow.com/questions/3705670/best-way-to-create-a-reversed-list-in-python
+    #relmeta['lineage_reversed'] = lineage[::-1]
     
     # FIXME figure out what to do about page_slots
     #relmeta['page_slots'] = api.slots
@@ -450,12 +495,27 @@ def relational_metadata(obj, request):
                        for child in obj.children_with_permission(request)],
     }
     
-    relmeta['current_user'] = serialize_user(obj, request, api=api)
     
-    #import pdb ; pdb.set_trace()
+    children = list()
+    for child in obj.children_with_permission(request):
+        cdata = serialize(child, request, relmeta=False)
+        for att in ['path', 'position']:
+            cdata[att] = getattr(child, att)
+        crel = dict()
+        crel['meta'] = relational_metadata(child, request, get_extra_info=False)
+        cdata['data']['relationships'] = crel
+        children.append(cdata)
+        #import pdb ; pdb.set_trace()
+    relmeta['children'] = children
+
+    # contents_buttons
+    cbuttons = [get_button_info(b, obj, request)
+                for b in get_contents_buttons(obj, request)]
+    relmeta['contents_buttons'] = cbuttons
+    
     return relmeta
 
-def serialize(obj, request, name=u'default'):
+def serialize(obj, request, name=u'default', relmeta=True):
     """ Serialize a Kotti content item.
 
     The response JSON conforms with JSONAPI standard.
@@ -475,11 +535,12 @@ def serialize(obj, request, name=u'default'):
     }
     meta = MetadataSchema().serialize(obj.__dict__)
 
-    # make data.relationships.meta object
-    rel = dict()
-    relmeta = dict()
-    rel['meta'] = relational_metadata(obj, request)
-    res['relationships'] = rel
+    if relmeta:
+        # make data.relationships.meta object
+        rel = dict()
+        relmeta = dict()
+        rel['meta'] = relational_metadata(obj, request)
+        res['relationships'] = rel
     
     
     return dict(data=res, meta=meta)
