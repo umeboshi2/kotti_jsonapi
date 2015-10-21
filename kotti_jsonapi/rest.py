@@ -346,6 +346,10 @@ def handle_link_parent(link, context, request):
             continue
     return action_links
 
+def pop_flash_queue(session, queue):
+    return [session.pop_flash(queue) for m in session.peek_flash(queue)]
+
+
 def relational_metadata(obj, request, get_user=True,
                         get_type_info=True,
                         get_permissions=True,
@@ -513,7 +517,16 @@ def relational_metadata(obj, request, get_user=True,
     cbuttons = [get_button_info(b, obj, request)
                 for b in get_contents_buttons(obj, request)]
     relmeta['contents_buttons'] = cbuttons
+
+
+    session = request.session
+
+    # stash a message on the queue for testing
+    session.flash(request.path, 'info')
     
+    relmeta['messages'] = dict(success=pop_flash_queue(session, 'success'),
+                               info=pop_flash_queue(session, 'info'),
+                               error=pop_flash_queue(session, 'error'))
     return relmeta
 
 def serialize(obj, request, name=u'default', relmeta=True):
