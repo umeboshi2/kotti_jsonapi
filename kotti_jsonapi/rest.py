@@ -152,7 +152,8 @@ def file_schema_factory(context, request):
 
 ACCEPT = 'application/vnd.api+json'
 
-@view_defaults(name='json', accept=ACCEPT, renderer="kotti_jsonp")
+@view_defaults(name='json', accept=ACCEPT, renderer="kotti_jsonp",
+               http_cache=0)
 class RestView(object):
     """ A generic @@json view for any and all contexts.
 
