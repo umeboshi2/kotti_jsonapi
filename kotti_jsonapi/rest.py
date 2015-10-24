@@ -44,6 +44,8 @@ from kotti.views.edit.actions import \
     content_type_factories as get_content_type_factories
 from kotti.views.edit.actions import contents_buttons as get_contents_buttons
 
+from kotti.views.edit.actions import NodeActions
+
 from kotti.views.edit.default_views import DefaultViewSelection
 from pyramid.httpexceptions import HTTPCreated
 from pyramid.httpexceptions import HTTPForbidden
@@ -152,9 +154,7 @@ def file_schema_factory(context, request):
 
 ACCEPT = 'application/vnd.api+json'
 
-@view_defaults(name='json', accept=ACCEPT, renderer="kotti_jsonp",
-               http_cache=0)
-class RestView(object):
+class BaseRestView(object):
     """ A generic @@json view for any and all contexts.
 
     Its response depends on the HTTP verb used. For ex:
@@ -164,6 +164,14 @@ class RestView(object):
         self.context = context
         self.request = request
 
+
+@view_defaults(name='json', accept=ACCEPT, renderer="kotti_jsonp",
+               http_cache=0)
+class RestView(BaseRestView):
+    """ A generic @@json view for any and all contexts.
+
+    Its response depends on the HTTP verb used. For ex:
+    """
     @view_config(request_method='GET', permission='view')
     def get(self):
         return self.context
@@ -242,7 +250,6 @@ def get_schema(obj, request, name=u'default'):
 def get_content_factory(request, name):
     return request.registry.getUtility(IContentFactory, name=name)
 
-
 # def filter_schema(schema, allowed_fields):
 #     """ Filters a schema to include only allowed fields
 #     """
@@ -272,11 +279,7 @@ class MetadataSchema(colander.MappingSchema):
         colander.String(),
         title=_(u'State'),
     )
-    state = colander.SchemaNode(
-        colander.String(),
-        title=_(u'State'),
-    )
-
+    
     default_view = colander.SchemaNode(
         colander.String(),
         title=_(u'Default view'),
@@ -286,6 +289,58 @@ class MetadataSchema(colander.MappingSchema):
         colander.String(),
         title=_(u'In navigation'),
     )
+    path = colander.SchemaNode(
+        colander.String(),
+        title=_(u'Path'),
+    )
+    #tags = colander.SchemaNode(
+    #    colander.String(),
+    #    title=_(u'Tags'),
+    #)
+    #owner = colander.SchemaNode(
+    #    colander.String(),
+    #    title=_(u'Owner'),
+    #)
+    #language = colander.SchemaNode(
+    #    colander.String(),
+    #    title=_(u'Language'),
+    #)
+
+
+@view_defaults(permission='edit')
+class JSONNodeActions(NodeActions):
+    @view_config(name='copyjson')
+    def copy_node(self):
+        super(JSONNodeActions, self).copy_node()
+        return super(JSONNodeActions, self).back()
+        
+
+    def _selected_children(self, add_context=True):
+        postdata = self.request.json
+        
+    
+@view_defaults(name='contents-json', accept=ACCEPT, renderer="json",
+               http_cache=0)
+class NodeContents(BaseRestView):
+    @view_config(request_method='GET', permission='view')
+    def get(self):
+        #return self.context
+        obj = self.context
+        children = list()
+        for child in obj.children_with_permission(self.request):
+            #cdata = render('kotti_jsonp', child, request=self.request)
+            #import pdb ; pdb.set_trace()
+            cdata = serialize(child, self.request)
+            #print "CDATA", cdata
+            #import pdb ; pdb.set_trace()
+            #import cPickle as Pickle
+            #filename = "child-%d.pickle" % child.id
+            #with file(filename, 'w') as outfile:
+            #    Pickle.dump(cdata, outfile)
+            #children.append(json.loads(cdata))
+            children.append(cdata)
+        return dict(result="success", data=children)
+    
 
 
 
@@ -533,6 +588,12 @@ def serialize(obj, request, name=u'default', relmeta=True):
     TODO: implement JSONAPI filtering and pagination.
     """
     data = get_schema(obj, request, name).serialize(obj.__dict__)
+    # FIXME
+    data['oid'] = obj.id
+    for key in ['tags', 'file']:
+        if key in data and data[key] is colander.null:
+            data[key] = None
+
 
     res = {}
     res['type'] = obj.type_info.name
@@ -562,6 +623,8 @@ jsonp.add_adapter(colander._null, lambda obj, req: None)
 jsonp.add_adapter(datetime.date, lambda obj, req: str(obj))
 jsonp.add_adapter(datetime.datetime, lambda obj, req: str(obj))
 jsonp.add_adapter(datetime.time, lambda obj, req: str(obj))
+
+contents_jsonp = JSONP(param_name='callback')
 
 
 def includeme(config):
