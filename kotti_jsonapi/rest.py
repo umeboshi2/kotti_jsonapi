@@ -283,17 +283,28 @@ class MetadataSchema(colander.MappingSchema):
     #)
 
 
-@view_defaults(permission='edit')
+@view_defaults(permission='edit', http_cache=0, renderer='json')
 class JSONNodeActions(NodeActions):
     @view_config(name='copyjson')
     def copy_node(self):
         super(JSONNodeActions, self).copy_node()
         return super(JSONNodeActions, self).back()
         
-
+    @view_config(name='up-json')
+    def up(self):
+        response = super(JSONNodeActions, self).up()
+        return dict(result=response)
+    
+    @view_config(name='down-json')
+    def down(self):
+        response = super(JSONNodeActions, self).down()
+        return dict(result=response)
+        
+    
     def _selected_children(self, add_context=True):
         postdata = self.request.json
-        
+        #import pdb ; pdb.set_trace()
+        return [int(c) for c in postdata['children']]
     
 @view_defaults(name='contents-json', accept=ACCEPT, renderer="json",
                http_cache=0)
