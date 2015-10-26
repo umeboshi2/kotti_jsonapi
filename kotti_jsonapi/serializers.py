@@ -1,3 +1,5 @@
+import os
+
 from kotti.util import _
 from kotti.util import LinkParent, LinkRenderer
 
@@ -82,12 +84,17 @@ def get_button_info(button_link, context, request):
     return link_data
 
 
-def handle_link_parent(link, context, request):
+def handle_link_parent(link, context, request, api):
     children = link.get_visible_children(context, request)
     action_links = list()
     for link in children:
         if type(link) is not LinkRenderer:
-            action_links.append(get_link_info(link, context, request))
+            link_info = get_link_info(link, context, request)
+            path = api.path(context, request)
+            resource, command = os.path.split(path)
+            link_info['resource'] = resource
+            link_info['command'] = command
+            action_links.append(link_info)
         else:
             continue
     return action_links
@@ -162,9 +169,14 @@ def relational_metadata(obj, request, get_user=True,
     link_parent = None
     for link in api.edit_links:
         if type(link) is not LinkParent:
-            edit_links.append(get_link_info(link, obj, request))
+            link_info = get_link_info(link, obj, request)
+            path = api.path(obj, request)
+            resource, command = os.path.split(path)
+            link_info['resource'] = resource
+            link_info['command'] = command
+            edit_links.append(link_info)
         else:
-            link_parent = handle_link_parent(link, obj, request)
+            link_parent = handle_link_parent(link, obj, request, api)
     relmeta['edit_links'] =  edit_links
     relmeta['link_parent'] = link_parent
     
@@ -179,8 +191,11 @@ def relational_metadata(obj, request, get_user=True,
     factories = get_content_type_factories(obj, request)['factories']
     flist = list()
     for f in factories:
+        path = api.path(obj, f.type_info.add_view)
         flist.append(dict(
             url=api.url(obj, f.type_info.add_view),
+            resource=os.path.dirname(path),
+            command=os.path.basename(path),
             title=f.type_info.title,
             ))
     relmeta['content_type_factories'] = flist
@@ -243,31 +258,11 @@ def relational_metadata(obj, request, get_user=True,
     }
     
     
-    #children = list()
-    #for child in obj.children_with_permission(request):
-    #    cdata = serialize(child, request, relmeta=False)
-    #    for att in ['path', 'position']:
-    #        cdata[att] = getattr(child, att)
-    #    crel = dict()
-    #    crel['meta'] = relational_metadata(child, request, get_extra_info=False)
-    #    cdata['data']['relationships'] = crel
-    #    children.append(cdata)
-    #    #import pdb ; pdb.set_trace()
-    #relmeta['children'] = children
 
     # contents_buttons
     cbuttons = [get_button_info(b, obj, request)
                 for b in get_contents_buttons(obj, request)]
     relmeta['contents_buttons'] = cbuttons
 
-
-    session = request.session
-
-    relmeta['messages'] = dict(info=session.pop_flash('info'),
-                               success=session.pop_flash('success'),
-                               error=session.pop_flash('error'),
-                               warning=session.pop_flash('warning'),
-                               default=session.pop_flash(''))
-    
     return relmeta
 

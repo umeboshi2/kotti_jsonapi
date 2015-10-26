@@ -38,6 +38,8 @@ from kotti.util import title_to_name
 
 
 from kotti.views.edit.actions import NodeActions
+from kotti.views.users import UsersManage
+from kotti.views.users import principal_schema, user_schema, group_schema
 
 from pyramid.httpexceptions import HTTPCreated
 from pyramid.httpexceptions import HTTPForbidden
@@ -53,6 +55,7 @@ import venusian
 
 from kotti_jsonapi.serializers import relational_metadata
 
+bools = dict(true=True, false=False)
 
 class ISchemaFactory(Interface):
     """ A factory for colander schemas.
@@ -130,6 +133,14 @@ def file_schema_factory(context, request):
 
 ACCEPT = 'application/vnd.api+json'
 
+def get_messages(request):
+    session = request.session
+    return dict(info=session.pop_flash('info'),
+                success=session.pop_flash('success'),
+                error=session.pop_flash('error'),
+                warning=session.pop_flash('warning'),
+                default=session.pop_flash(''))    
+
 class BaseRestView(object):
     """ A generic @@json view for any and all contexts.
 
@@ -139,6 +150,10 @@ class BaseRestView(object):
     def __init__(self, context, request):
         self.context = context
         self.request = request
+
+    def _get_messages(self):
+        return get_messages(self.request)
+    
 
 
 @view_defaults(name='json', accept=ACCEPT, renderer="kotti_jsonp",
@@ -262,6 +277,7 @@ class MetadataSchema(colander.MappingSchema):
     )
 
     in_navigation = colander.SchemaNode(
+        #colander.Bool(),
         colander.String(),
         title=_(u'In navigation'),
     )
@@ -269,10 +285,10 @@ class MetadataSchema(colander.MappingSchema):
         colander.String(),
         title=_(u'Path'),
     )
-    #tags = colander.SchemaNode(
-    #    colander.String(),
-    #    title=_(u'Tags'),
-    #)
+    tags = colander.SchemaNode(
+        colander.String(),
+        title=_(u'Tags'),
+    )
     #owner = colander.SchemaNode(
     #    colander.String(),
     #    title=_(u'Owner'),
@@ -289,24 +305,48 @@ class JSONNodeActions(NodeActions):
     def copy_node(self):
         super(JSONNodeActions, self).copy_node()
         return super(JSONNodeActions, self).back()
-        
+
     @view_config(name='up-json')
     def up(self):
         response = super(JSONNodeActions, self).up()
-        return dict(result=response)
+        meta = dict(messages=get_messages(self.request))
+        return dict(result=response, meta=meta)
     
     @view_config(name='down-json')
     def down(self):
         response = super(JSONNodeActions, self).down()
-        return dict(result=response)
+        meta = dict(messages=get_messages(self.request))
+        return dict(result=response, meta=meta)
         
     
     def _selected_children(self, add_context=True):
         postdata = self.request.json
         #import pdb ; pdb.set_trace()
         return [int(c) for c in postdata['children']]
+
+
+@view_config(name="setup-users-json", permission="admin",
+             root_only=True, renderer="kotti_jsonp")
+class JSONUsersManage(UsersManage):
+    def __call__(self):
+        data = super(JSONUsersManage, self).__call__()
+        data['available_roles'] = [dict(name=r.name, title=r.title)
+                                   for r in data['available_roles']]
+        parsed_entries = list()
+        for principal, groups in data['entries']:
+        #for ptuple in data['entries']:
+            #@import pdb ; pdb.set_trace()
+            pdata = dict(name=principal.name,
+                         title=principal.title,
+                         avatar_url=data['api'].avatar_url(principal))
+            parsed_entries.append(dict(principal=pdata,groups=groups))
+        data['entries'] = parsed_entries
+        del data['api']
+        messages = get_messages(self.request)
+        meta = dict(messages=messages)
+        return dict(data=data, meta=meta)
     
-@view_defaults(name='contents-json', accept=ACCEPT, renderer="json",
+@view_defaults(name='contents-json', accept=ACCEPT, renderer="kotti_jsonp",
                http_cache=0)
 class NodeContents(BaseRestView):
     @view_config(request_method='GET', permission='view')
@@ -318,7 +358,7 @@ class NodeContents(BaseRestView):
         for child in obj.children_with_permission(self.request):
             #cdata = render('kotti_jsonp', child, request=self.request)
             #import pdb ; pdb.set_trace()
-            cdata = serialize(child, self.request)
+            cdata = serialize(child, self.request, include_messages=False)
             cdata['meta']['position'] = index
             index += 1
             #print "CDATA", cdata
@@ -329,12 +369,15 @@ class NodeContents(BaseRestView):
             #    Pickle.dump(cdata, outfile)
             #children.append(json.loads(cdata))
             children.append(cdata)
-        return dict(result="success", data=children)
+        messages = get_messages(self.request)
+        meta = dict(messages=messages)
+        return dict(data=children, meta=meta)
     
 
 
 
-def serialize(obj, request, name=u'default', relmeta=True):
+def serialize(obj, request, name=u'default', relmeta=True,
+              include_messages=True):
     """ Serialize a Kotti content item.
 
     The response JSON conforms with JSONAPI standard.
@@ -344,6 +387,8 @@ def serialize(obj, request, name=u'default', relmeta=True):
     data = get_schema(obj, request, name).serialize(obj.__dict__)
     # FIXME
     data['oid'] = obj.id
+
+    # FIXME kotti_jsonp renderer takes care of this
     for key in ['tags', 'file']:
         if key in data and data[key] is colander.null:
             data[key] = None
@@ -359,7 +404,10 @@ def serialize(obj, request, name=u'default', relmeta=True):
                      for child in obj.children_with_permission(request)]
     }
     meta = MetadataSchema().serialize(obj.__dict__)
-
+    # FIXME in_navigation is serialized as string instead of bool
+    meta['in_navigation'] = bools[meta['in_navigation'].lower()]
+    if include_messages:
+        meta['messages'] = get_messages(request)
     if relmeta:
         # make data.relationships.meta object
         rel = dict()
@@ -375,7 +423,7 @@ jsonp = JSONP(param_name='callback')
 jsonp.add_adapter(Content, serialize)
 jsonp.add_adapter(colander._null, lambda obj, req: None)
 jsonp.add_adapter(datetime.date, lambda obj, req: str(obj))
-jsonp.add_adapter(datetime.datetime, lambda obj, req: str(obj))
+jsonp.add_adapter(datetime.datetime, lambda obj, req: obj.isoformat())
 jsonp.add_adapter(datetime.time, lambda obj, req: str(obj))
 
 contents_jsonp = JSONP(param_name='callback')
