@@ -27,7 +27,7 @@ def sb(context, request):
 class TestRestify:
 
     def test_restify_decorator(self, config):
-        from kotti.rest import ISchemaFactory
+        from kotti_jsonapi.rest import ISchemaFactory
         from zope.component import getUtility
 
         config.scan('kotti.tests.test_rest')
@@ -39,12 +39,12 @@ class TestRestify:
                           name='Something/b')(obj, req) == 'b'
 
     def test_get_content_factory(self, config):
-        from kotti.rest import get_content_factory
+        from kotti_jsonapi.rest import get_content_factory
         config.scan('kotti.tests.test_rest')
         assert get_content_factory(DummyRequest(), 'Something') is Something
 
     def test_IContentFactory_registration(self, config):
-        from kotti.rest import IContentFactory
+        from kotti_jsonapi.rest import IContentFactory
         from zope.component import getUtility
 
         config.scan('kotti.tests.test_rest')
@@ -54,7 +54,7 @@ class TestRestify:
 class TestSerializeDefaultContent:
 
     def make_one(self, config, klass=Content, **kw):
-        from kotti.rest import serialize
+        from kotti_jsonapi.rest import serialize
 
         config.scan('kotti.rest')
 
