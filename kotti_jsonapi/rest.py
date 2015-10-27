@@ -326,7 +326,7 @@ class JSONNodeActions(NodeActions):
 
 
 @view_config(name="setup-users-json", permission="admin",
-             root_only=True, renderer="kotti_jsonp")
+             root_only=True, renderer="kotti_jsonp", http_cache=0)
 class JSONUsersManage(UsersManage):
     def __call__(self):
         data = super(JSONUsersManage, self).__call__()
@@ -338,8 +338,11 @@ class JSONUsersManage(UsersManage):
             #@import pdb ; pdb.set_trace()
             pdata = dict(name=principal.name,
                          title=principal.title,
+                         email=principal.email,
                          avatar_url=data['api'].avatar_url(principal))
-            parsed_entries.append(dict(principal=pdata,groups=groups))
+            enabled, disabled = groups
+            parsed_entries.append(dict(principal=pdata, enabled=enabled,
+                                       disabled=disabled))
         data['entries'] = parsed_entries
         del data['api']
         messages = get_messages(self.request)
