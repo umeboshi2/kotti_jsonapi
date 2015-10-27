@@ -14,12 +14,10 @@ from kotti_jsonapi.fanstatic import css_and_js
 from kotti_jsonapi.views import BaseView
 
 
-@view_defaults(context=CustomContent, permission='view')
+
 class CustomContentViews(BaseView):
     """ Views for :class:`kotti_jsonapi.resources.CustomContent` """
 
-    @view_config(name='view', permission='view',
-                 renderer='kotti_jsonapi:templates/custom-content-default.pt')
     def default_view(self):
         """ Default view for :class:`kotti_jsonapi.resources.CustomContent`
 
@@ -31,8 +29,6 @@ class CustomContentViews(BaseView):
             'foo': _(u'bar'),
         }
 
-    @view_config(name='alternative-view', permission='view',
-                 renderer='kotti_jsonapi:templates/custom-content-alternative.pt')
     def alternative_view(self):
         """ Alternative view for :class:`kotti_jsonapi.resources.CustomContent`.
         This view requires the JS / CSS resources defined in

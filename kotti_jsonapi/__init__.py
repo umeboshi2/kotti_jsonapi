@@ -25,9 +25,6 @@ def kotti_configure(settings):
 
     settings['pyramid.includes'] += ' kotti_jsonapi'
     settings['kotti.alembic_dirs'] += ' kotti_jsonapi:alembic'
-    settings['kotti.available_types'] += ' kotti_jsonapi.resources.CustomContent'
-    settings['kotti.fanstatic.view_needed'] += ' kotti_jsonapi.fanstatic.css_and_js'
-    File.type_info.addable_to.append('CustomContent')
 
 
 def includeme(config):
@@ -37,8 +34,5 @@ def includeme(config):
     :param config: Pyramid configurator object.
     :type config: :class:`pyramid.config.Configurator`
     """
-
-    #config.add_translation_dirs('kotti_jsonapi:locale')
-    #config.add_static_view('static-kotti_jsonapi', 'kotti_jsonapi:static')
     config.include('kotti_jsonapi.rest')
     config.scan(__name__)

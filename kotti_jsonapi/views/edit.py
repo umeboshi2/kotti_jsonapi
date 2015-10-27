@@ -23,9 +23,6 @@ class CustomContentSchema(ContentSchema):
         title=_(u"Custom attribute"))
 
 
-@view_config(name=CustomContent.type_info.add_view, 
-             permission=CustomContent.type_info.add_permission,
-             renderer='kotti:templates/edit/node.pt')
 class CustomContentAddForm(AddFormView):
     """ Form to add a new instance of CustomContent. """
 
@@ -34,8 +31,6 @@ class CustomContentAddForm(AddFormView):
     item_type = _(u"CustomContent")
 
 
-@view_config(name='edit', context=CustomContent, permission='edit',
-             renderer='kotti:templates/edit/node.pt')
 class CustomContentEditForm(EditFormView):
     """ Form to edit existing CustomContent objects. """
 
