@@ -9,7 +9,6 @@ from pyramid.view import view_config
 from pyramid.view import view_defaults
 
 from kotti_jsonapi import _
-from kotti_jsonapi.resources import CustomContent
 from kotti_jsonapi.fanstatic import css_and_js
 from kotti_jsonapi.views import BaseView
 
