@@ -17,7 +17,6 @@ version = '0.1dev'
 
 install_requires = [
     'Kotti>=1.0.0',
-    'kotti_tinymce',
 ]
 
 
@@ -28,29 +27,23 @@ setup(
     long_description='\n\n'.join([README, CHANGES]),
     classifiers=[
         "Programming Language :: Python",
-        "Programming Language :: Python :: 2.6",
         "Programming Language :: Python :: 2.7",
         "Framework :: Pylons",
         "Topic :: Internet :: WWW/HTTP",
         "Topic :: Internet :: WWW/HTTP :: Dynamic Content",
         "Topic :: Internet :: WWW/HTTP :: WSGI :: Application",
-        "License :: Repoze Public License",
+        "License :: Public Domain",
     ],
-    author='Kotti developers',
-    author_email='kotti@googlegroups.com',
+    author='Joseph Rawson',
+    author_email='joseph.rawson.works@gmail.com',
     url='https://github.com/umeboshi2/kotti_jsonapi',
     keywords='kotti web cms wcms pylons pyramid sqlalchemy bootstrap',
-    license="BSD-derived (http://www.repoze.org/LICENSE.txt)",
+    license="Public Domain",
     packages=find_packages(),
     include_package_data=True,
     zip_safe=False,
     install_requires=install_requires,
     tests_require=[],
     dependency_links=[],
-    entry_points={
-        'fanstatic.libraries': [
-            'kotti_jsonapi = kotti_jsonapi.fanstatic:library',
-        ],
-    },
     extras_require={},
 )
